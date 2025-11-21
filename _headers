@@ -1,2 +1,2 @@
-/quizbuilder
-  Basic-Auth: trainer:SuperQuiz
+/quizbuilder/*
+  Basic-Auth: teacher:SuperSecret123
