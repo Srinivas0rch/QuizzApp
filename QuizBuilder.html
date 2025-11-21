@@ -62,9 +62,10 @@
   </style>
 </head>
 <script>
-  if (localStorage.getItem("trainerAuthenticated") !== "true") {
-    window.location.href = "trainer-login.html";
-  }
+const REQUIRED_HASH = "42e5bd285ec9a0ff35b0c6468af6a687aed7748436c6d9a5896153fbf6f46f67";
+if (localStorage.getItem("trainerAuth") !== REQUIRED_HASH) {
+  window.location.href = "trainer-login.html";
+}
 </script>
 
 <body>
