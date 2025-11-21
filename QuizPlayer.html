@@ -104,7 +104,7 @@
 
   async function loadManifest() {
     try {
-      const res = await fetch("quizzes/manifest.json");
+      const res = await fetch("/quizzes/manifest.json");
       if (!res.ok) throw new Error("Cannot load manifest");
       const manifest = await res.json();
       renderQuizList(manifest);
