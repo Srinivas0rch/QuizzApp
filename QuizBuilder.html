@@ -61,6 +61,14 @@
     }
   </style>
 </head>
+<script>
+const REQUIRED_HASH = "d7a9ffa403ef2e3f4cf1e6f24dbde3e2eb06b1ceccb2ac18636cb0deb29bd8da";
+
+if (localStorage.getItem("trainerAuth") !== REQUIRED_HASH) {
+  window.location.href = "trainer-login.html";
+}
+</script>
+
 <body>
 <div class="app">
   <!-- LEFT: Builder controls -->
