@@ -1,1 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Quiz Builder (Teacher)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+  <!-- Mammoth for DOCX -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, sans-serif; }
+    body {
+      margin: 0; padding: 0; background: #f3f4f6;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    }
+    .app {
+      width: 95%; max-width: 1100px;
+      background: white; border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 12px 30px rgba(15,23,42,0.25);
+      display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px;
+    }
+    @media (max-width: 900px) { .app { grid-template-columns: 1fr; } }
+
+    .panel, .preview {
+      background: #f9fafb; border-radius: 12px;
+      border: 1px solid #e5e7eb; padding: 14px 16px;
+    }
+    h1, h2 { margin: 0 0 0.5rem; }
+    .meta { font-size: 0.85rem; color:#6b7280; margin-bottom: 0.5rem; }
+
+    label { font-size:0.85rem; font-weight:600; display:block; margin-bottom:4px; }
+    input[type="text"] {
+      width: 100%; padding: 8px; border-radius: 8px;
+      border: 1px solid #d1d5db; margin-bottom: 8px;
+    }
+    .btn {
+      padding: 8px 14px; border-radius: 10px; border:none;
+      background:#4f46e5; color:white; font-weight:600;
+      cursor:pointer; font-size:0.9rem;
+      box-shadow:0 6px 14px rgba(79,70,229,0.35);
+    }
+    .btn:disabled { opacity:0.5; box-shadow:none; cursor:default; }
+
+    .question-block { margin-bottom: 10px; border-bottom:1px dashed #e5e7eb; padding-bottom:8px; }
+    .question-title { font-weight:600; margin-bottom:4px; }
+    .option-line { font-size:0.85rem; margin-left:12px; }
+    .tag { display:inline-block; font-size:0.75rem; padding:2px 6px;
+           border-radius:999px; background:#e5e7eb; margin-left:6px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <!-- LEFT: Builder controls -->
+  <div>
+    <h1>Quiz Builder (Teacher)</h1>
+    <p class="meta">
+      1. Upload a questions DOCX/TXT and an answer key DOCX/TXT.<br>
+      2. Click <strong>Load Quiz</strong>.<br>
+      3. Enter a quiz title.<br>
+      4. Click <strong>Download Quiz JSON</strong> and place it in <code>/quizzes</code>.
+    </p>
+
+    <div class="panel">
+      <label>Questions File</label>
+      <input id="questionsFile" type="file" accept=".txt,.docx" />
+
+      <label style="margin-top:10px;">Answer Key File</label>
+      <input id="answersFile" type="file" accept=".txt,.docx" />
+
+      <label style="margin-top:10px;">Quiz Title</label>
+      <input id="quizTitleInput" type="text" placeholder="e.g. Python Basics Quiz" />
+
+      <label>Description (optional)</label>
+      <input id="quizDescInput" type="text" placeholder="Short description" />
+
+      <button id="loadBtn" class="btn" style="margin-top:10px;">Load Quiz</button>
+      <p id="loadStatus" class="meta"></p>
+
+      <button id="downloadBtn" class="btn" style="margin-top:10px;" disabled>
+        Download Quiz JSON
+      </button>
+    </div>
+  </div>
+
+  <!-- RIGHT: Preview -->
+  <div class="preview">
+    <h2>Quiz Preview</h2>
+    <p id="previewMeta" class="meta">No quiz loaded yet.</p>
+    <div id="previewBody" style="max-height:400px; overflow:auto; font-size:0.9rem;">
+      <p style="color:#6b7280;">Load a quiz to see a preview here.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  let quizQuestions = []; // [{text, type, options, answerIndex}]
+
+  async function readFile(file) {
+    if (file.name.toLowerCase().endsWith(".txt")) {
+      return file.text();
+    }
+    if (file.name.toLowerCase().endsWith(".docx")) {
+      const buffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+      return result.value;
+    }
+    throw new Error("Unsupported file type");
+  }
+
+  function parseQuestions(text) {
+    const lines = text.split(/\r?\n/).map(l => l.trim());
+    const questions = [];
+    let current = null;
+
+    function pushCurrent() {
+      if (!current || !current.text) return;
+      current.type = current.options.length ? "mcq" : "short";
+      questions.push(current);
+    }
+
+    for (const lineRaw of lines) {
+      const line = lineRaw.trim();
+      if (!line) continue;
+
+      const qMatch = /^(\d+)[.)-]\s*(.+)$/.exec(line);
+      const optMatch = /^([A-D])[.)]\s*(.+)$/i.exec(line);
+
+      if (qMatch) {
+        pushCurrent();
+        current = { text: qMatch[2].trim(), options: [], answerIndex: null };
+      } else if (optMatch && current) {
+        current.options.push(optMatch[2].trim());
+      } else if (current) {
+        current.text += " " + line;
+      }
+    }
+
+    pushCurrent();
+    return questions;
+  }
+
+  function parseAnswers(text) {
+    const lines = text.split(/\r?\n/).map(l => l.trim());
+    const answers = [];
+
+    for (const line of lines) {
+      const m = /^(\d+)[.)-]\s*([A-D])/i.exec(line);
+      if (m) answers.push("ABCD".indexOf(m[2].toUpperCase()));
+    }
+    return answers;
+  }
+
+  function attachAnswersToQuestions(questions, answers) {
+    let idx = 0;
+    for (const q of questions) {
+      if (q.options.length && idx < answers.length) {
+        q.answerIndex = answers[idx++];
+      }
+    }
+  }
+
+  function renderPreview() {
+    const body = document.getElementById("previewBody");
+    const meta = document.getElementById("previewMeta");
+
+    if (!quizQuestions.length) {
+      meta.textContent = "No quiz loaded.";
+      body.innerHTML = "<p style='color:#6b7280;'>No questions.</p>";
+      return;
+    }
+
+    meta.textContent = `${quizQuestions.length} question(s).`;
+    body.innerHTML = "";
+
+    quizQuestions.forEach((q, idx) => {
+      const block = document.createElement("div");
+      block.className = "question-block";
+
+      const title = document.createElement("div");
+      title.className = "question-title";
+      title.textContent = `Q${idx + 1}. ${q.text}`;
+      block.appendChild(title);
+
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = q.type === "mcq" ? "MCQ" : "Short answer";
+      block.appendChild(tag);
+
+      if (q.type === "mcq") {
+        q.options.forEach((opt, i) => {
+          const line = document.createElement("div");
+          line.className = "option-line";
+          line.textContent = `${"ABCD"[i]}) ${opt}`;
+          if (q.answerIndex === i) {
+            const ansTag = document.createElement("span");
+            ansTag.className = "tag";
+            ansTag.textContent = "Correct";
+            line.appendChild(ansTag);
+          }
+          block.appendChild(line);
+        });
+      }
+
+      body.appendChild(block);
+    });
+  }
+
+  document.getElementById("loadBtn").onclick = async () => {
+    const qFile = document.getElementById("questionsFile").files[0];
+    const aFile = document.getElementById("answersFile").files[0];
+
+    if (!qFile) {
+      alert("Please choose a questions file.");
+      return;
+    }
+    if (!aFile) {
+      alert("Please choose an answer key file.");
+      return;
+    }
+
+    try {
+      document.getElementById("loadStatus").textContent = "Reading files...";
+      const [qText, aText] = await Promise.all([readFile(qFile), readFile(aFile)]);
+      const questions = parseQuestions(qText);
+      const answers = parseAnswers(aText);
+
+      if (!questions.length) {
+        alert("No questions detected.");
+        document.getElementById("loadStatus").textContent = "";
+        return;
+      }
+      if (!answers.length) {
+        alert("No answers detected in answer key.");
+        document.getElementById("loadStatus").textContent = "";
+        return;
+      }
+
+      attachAnswersToQuestions(questions, answers);
+      quizQuestions = questions;
+      renderPreview();
+      document.getElementById("loadStatus").textContent = "Quiz loaded successfully.";
+      document.getElementById("downloadBtn").disabled = false;
+    } catch (e) {
+      console.error(e);
+      alert("Failed to read or parse files.");
+      document.getElementById("loadStatus").textContent = "";
+    }
+  };
+
+  document.getElementById("downloadBtn").onclick = () => {
+    if (!quizQuestions.length) {
+      alert("Load a quiz first.");
+      return;
+    }
+
+    const title = document.getElementById("quizTitleInput").value.trim() || "Untitled Quiz";
+    const desc  = document.getElementById("quizDescInput").value.trim();
+
+    const quizData = {
+      title,
+      description: desc,
+      questions: quizQuestions
+    };
+
+    const blob = new Blob([JSON.stringify(quizData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safeName = title.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    a.href = url;
+    a.download = safeName + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+</script>
+</body>
+</html>
