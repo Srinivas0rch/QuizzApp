@@ -1,0 +1,66 @@
+{
+  "title": "Untitled Quiz",
+  "description": "",
+  "questions": [
+    {
+      "text": "What Python structure uses square brackets?",
+      "type": "short",
+      "options": [],
+      "answerIndex": null
+    },
+    {
+      "text": "What does a list comprehension generally do?",
+      "type": "short",
+      "options": [],
+      "answerIndex": null
+    },
+    {
+      "text": "Which library is used for numerical operations in the refresher?",
+      "type": "short",
+      "options": [],
+      "answerIndex": null
+    },
+    {
+      "text": "What is the output of [x*2 for x in [2,3]]?",
+      "type": "short",
+      "options": [],
+      "answerIndex": null
+    },
+    {
+      "text": "What data structure stores key-value pairs?",
+      "type": "short",
+      "options": [],
+      "answerIndex": null
+    },
+    {
+      "text": "What keyword is used to define a function in Python?",
+      "type": "short",
+      "options": [],
+      "answerIndex": null
+    },
+    {
+      "text": "What file format is commonly used for structured configurations?",
+      "type": "short",
+      "options": [],
+      "answerIndex": null
+    },
+    {
+      "text": "What module is used for reading CSV files in the script?",
+      "type": "short",
+      "options": [],
+      "answerIndex": null
+    },
+    {
+      "text": "What does the print() function do?",
+      "type": "short",
+      "options": [],
+      "answerIndex": null
+    },
+    {
+      "text": "What is the name of the library used for working with DataFrames?",
+      "type": "short",
+      "options": [],
+      "answerIndex": null
+    }
+  ]
+}
