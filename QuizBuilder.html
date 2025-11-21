@@ -5,7 +5,7 @@
   <title>Quiz Builder (Teacher)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Mammoth for DOCX -->
+  <!-- Mammoth for DOCX parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
 
   <style>
@@ -35,6 +35,7 @@
       width: 100%; padding: 8px; border-radius: 8px;
       border: 1px solid #d1d5db; margin-bottom: 8px;
     }
+
     .btn {
       padding: 8px 14px; border-radius: 10px; border:none;
       background:#4f46e5; color:white; font-weight:600;
@@ -46,8 +47,18 @@
     .question-block { margin-bottom: 10px; border-bottom:1px dashed #e5e7eb; padding-bottom:8px; }
     .question-title { font-weight:600; margin-bottom:4px; }
     .option-line { font-size:0.85rem; margin-left:12px; }
-    .tag { display:inline-block; font-size:0.75rem; padding:2px 6px;
-           border-radius:999px; background:#e5e7eb; margin-left:6px; }
+
+    .tag {
+      display:inline-block; font-size:0.75rem;
+      padding:2px 6px; border-radius:999px;
+      background:#e5e7eb; margin-left:6px; margin-bottom:4px;
+    }
+    .tag-green {
+      background:#dcfce7; color:#166534;
+    }
+    .tag-orange {
+      background:#ffedd5; color:#9a3412;
+    }
   </style>
 </head>
 <body>
@@ -56,18 +67,24 @@
   <div>
     <h1>Quiz Builder (Teacher)</h1>
     <p class="meta">
-      1. Upload a questions DOCX/TXT and an answer key DOCX/TXT.<br>
-      2. Click <strong>Load Quiz</strong>.<br>
-      3. Enter a quiz title.<br>
-      4. Click <strong>Download Quiz JSON</strong> and place it in <code>/quizzes</code>.
+      Upload a questions file (.txt / .docx).<br>
+      Optionally upload an answer key file (.txt / .docx).<br><br>
+      • With answer key → MCQ questions are graded.<br>
+      • Without answer key → MCQ questions are <strong>ungraded</strong> but options are kept.<br>
+      • Questions without options → become short-answer questions.
     </p>
 
     <div class="panel">
-      <label>Questions File</label>
+      <label>Questions File (required)</label>
       <input id="questionsFile" type="file" accept=".txt,.docx" />
 
-      <label style="margin-top:10px;">Answer Key File</label>
-      <input id="answersFile" type="file" accept=".txt,.docx" />
+      <div style="margin-top:10px;">
+        <label>Answer Key File (optional)</label>
+        <input id="answersFile" type="file" accept=".txt,.docx" />
+        <p class="meta" style="margin-top:4px;">
+          If you skip this, MCQs will not be auto-graded.
+        </p>
+      </div>
 
       <label style="margin-top:10px;">Quiz Title</label>
       <input id="quizTitleInput" type="text" placeholder="e.g. Python Basics Quiz" />
@@ -95,8 +112,9 @@
 </div>
 
 <script>
-  let quizQuestions = []; // [{text, type, options, answerIndex}]
+  let quizQuestions = []; // [{text, type: 'mcq'|'short', options:[], answerIndex: null|number}]
 
+  // Read file (txt / docx)
   async function readFile(file) {
     if (file.name.toLowerCase().endsWith(".txt")) {
       return file.text();
@@ -109,6 +127,7 @@
     throw new Error("Unsupported file type");
   }
 
+  // Parse questions from text
   function parseQuestions(text) {
     const lines = text.split(/\r?\n/).map(l => l.trim());
     const questions = [];
@@ -116,7 +135,7 @@
 
     function pushCurrent() {
       if (!current || !current.text) return;
-      current.type = current.options.length ? "mcq" : "short";
+      // type will be set later (MCQ/short) based on options + presence of answers
       questions.push(current);
     }
 
@@ -124,8 +143,8 @@
       const line = lineRaw.trim();
       if (!line) continue;
 
-      const qMatch = /^(\d+)[.)-]\s*(.+)$/.exec(line);
-      const optMatch = /^([A-D])[.)]\s*(.+)$/i.exec(line);
+      const qMatch = /^(\d+)[.)-]\s*(.+)$/.exec(line);      // "1. Question?"
+      const optMatch = /^([A-D])[.)]\s*(.+)$/i.exec(line); // "A) Option" or "A. Option"
 
       if (qMatch) {
         pushCurrent();
@@ -141,26 +160,60 @@
     return questions;
   }
 
+  // Parse answers from answer key
   function parseAnswers(text) {
     const lines = text.split(/\r?\n/).map(l => l.trim());
     const answers = [];
 
     for (const line of lines) {
       const m = /^(\d+)[.)-]\s*([A-D])/i.exec(line);
-      if (m) answers.push("ABCD".indexOf(m[2].toUpperCase()));
+      if (m) {
+        const idx = "ABCD".indexOf(m[2].toUpperCase());
+        if (idx !== -1) answers.push(idx);
+      }
     }
     return answers;
   }
 
-  function attachAnswersToQuestions(questions, answers) {
-    let idx = 0;
-    for (const q of questions) {
-      if (q.options.length && idx < answers.length) {
-        q.answerIndex = answers[idx++];
+  // Attach answers to questions if answer key provided
+  // questions: raw parsed questions with options[]
+  // answers: array of indices 0-3 for A-D
+  // hasAnswers: boolean (true if an answer file was uploaded and parsed)
+  function finalizeQuestions(questions, answers, hasAnswers) {
+    let ansIdx = 0;
+
+    return questions.map(q => {
+      const isMCQ = q.options && q.options.length > 0;
+
+      if (isMCQ && hasAnswers && ansIdx < answers.length) {
+        // Graded MCQ
+        return {
+          text: q.text,
+          type: "mcq",
+          options: q.options,
+          answerIndex: answers[ansIdx++]  // store correct option
+        };
+      } else if (isMCQ && !hasAnswers) {
+        // UNGRADED MCQ: keep options, but no correct answer
+        return {
+          text: q.text,
+          type: "mcq",
+          options: q.options,
+          answerIndex: null               // Player will treat this as ungraded
+        };
+      } else {
+        // Short-answer question (no options)
+        return {
+          text: q.text,
+          type: "short",
+          options: [],
+          answerIndex: null
+        };
       }
-    }
+    });
   }
 
+  // Render preview on right side
   function renderPreview() {
     const body = document.getElementById("previewBody");
     const meta = document.getElementById("previewMeta");
@@ -171,7 +224,13 @@
       return;
     }
 
-    meta.textContent = `${quizQuestions.length} question(s).`;
+    const mcqCount = quizQuestions.filter(q => q.type === "mcq").length;
+    const gradedMCQ = quizQuestions.filter(q => q.type === "mcq" && q.answerIndex !== null).length;
+    const shortCount = quizQuestions.filter(q => q.type === "short").length;
+
+    meta.textContent =
+      `${quizQuestions.length} question(s): ${mcqCount} MCQ (${gradedMCQ} graded), ${shortCount} short-answer.`;
+
     body.innerHTML = "";
 
     quizQuestions.forEach((q, idx) => {
@@ -183,30 +242,48 @@
       title.textContent = `Q${idx + 1}. ${q.text}`;
       block.appendChild(title);
 
-      const tag = document.createElement("span");
-      tag.className = "tag";
-      tag.textContent = q.type === "mcq" ? "MCQ" : "Short answer";
-      block.appendChild(tag);
+      const typeTag = document.createElement("span");
+      typeTag.className = "tag";
+      typeTag.textContent = (q.type === "mcq") ? "MCQ" : "Short answer";
+      block.appendChild(typeTag);
 
       if (q.type === "mcq") {
+        if (q.answerIndex !== null) {
+          const gradedTag = document.createElement("span");
+          gradedTag.className = "tag tag-green";
+          gradedTag.textContent = "Graded";
+          block.appendChild(gradedTag);
+        } else {
+          const ungradedTag = document.createElement("span");
+          ungradedTag.className = "tag tag-orange";
+          ungradedTag.textContent = "Ungraded (no answer key)";
+          block.appendChild(ungradedTag);
+        }
+
         q.options.forEach((opt, i) => {
           const line = document.createElement("div");
           line.className = "option-line";
           line.textContent = `${"ABCD"[i]}) ${opt}`;
           if (q.answerIndex === i) {
             const ansTag = document.createElement("span");
-            ansTag.className = "tag";
+            ansTag.className = "tag tag-green";
             ansTag.textContent = "Correct";
             line.appendChild(ansTag);
           }
           block.appendChild(line);
         });
+      } else {
+        const info = document.createElement("div");
+        info.className = "meta";
+        info.textContent = "Short-answer: student will type their response.";
+        block.appendChild(info);
       }
 
       body.appendChild(block);
     });
   }
 
+  // Load button handler
   document.getElementById("loadBtn").onclick = async () => {
     const qFile = document.getElementById("questionsFile").files[0];
     const aFile = document.getElementById("answersFile").files[0];
@@ -215,40 +292,57 @@
       alert("Please choose a questions file.");
       return;
     }
-    if (!aFile) {
-      alert("Please choose an answer key file.");
-      return;
-    }
 
     try {
-      document.getElementById("loadStatus").textContent = "Reading files...";
-      const [qText, aText] = await Promise.all([readFile(qFile), readFile(aFile)]);
-      const questions = parseQuestions(qText);
-      const answers = parseAnswers(aText);
+      document.getElementById("loadStatus").textContent = "Reading file(s)...";
 
-      if (!questions.length) {
-        alert("No questions detected.");
-        document.getElementById("loadStatus").textContent = "";
-        return;
-      }
-      if (!answers.length) {
-        alert("No answers detected in answer key.");
+      // Read questions first
+      const qText = await readFile(qFile);
+      const rawQuestions = parseQuestions(qText);
+
+      if (!rawQuestions.length) {
+        alert("No questions detected in the questions file.");
         document.getElementById("loadStatus").textContent = "";
         return;
       }
 
-      attachAnswersToQuestions(questions, answers);
-      quizQuestions = questions;
+      let answers = [];
+      let hasAnswers = false;
+
+      if (aFile) {
+        try {
+          const aText = await readFile(aFile);
+          answers = parseAnswers(aText);
+          hasAnswers = answers.length > 0;
+          if (!hasAnswers) {
+            alert("No valid answers detected in answer key file. MCQs will be ungraded.");
+          }
+        } catch (err) {
+          console.warn("Failed to parse answers:", err);
+          alert("Could not parse answer key. MCQs will be ungraded.");
+          hasAnswers = false;
+        }
+      } else {
+        // No answer file uploaded
+        hasAnswers = false;
+      }
+
+      quizQuestions = finalizeQuestions(rawQuestions, answers, hasAnswers);
       renderPreview();
-      document.getElementById("loadStatus").textContent = "Quiz loaded successfully.";
+      document.getElementById("loadStatus").textContent =
+        hasAnswers
+          ? "Quiz loaded with graded MCQs."
+          : "Quiz loaded (MCQs ungraded, no answer key).";
       document.getElementById("downloadBtn").disabled = false;
+
     } catch (e) {
       console.error(e);
-      alert("Failed to read or parse files.");
+      alert("Failed to read or parse file(s).");
       document.getElementById("loadStatus").textContent = "";
     }
   };
 
+  // Download JSON button handler
   document.getElementById("downloadBtn").onclick = () => {
     if (!quizQuestions.length) {
       alert("Load a quiz first.");
