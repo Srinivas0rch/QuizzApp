@@ -1,8 +1,0 @@
-/quizbuilder
-  Basic-Auth: trainer:SuperSecret123
-
-/quizbuilder.html
-  Basic-Auth: trainer:SuperSecret123
-
-/quizbuilder*
-  Basic-Auth: teacher:SuperSecret123
