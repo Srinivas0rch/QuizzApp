@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Quiz Player (Student)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, sans-serif; }
+    body {
+      margin: 0; padding: 0; background: #f3f4f6;
+      min-height: 100vh; display:flex; align-items:center; justify-content:center;
+    }
+    .app {
+      width:95%; max-width:1000px; background:white; border-radius:16px;
+      padding:20px; box-shadow:0 12px 30px rgba(15,23,42,0.25);
+      display:grid; grid-template-columns: 1fr 1.2fr; gap:20px;
+    }
+    @media (max-width:900px){ .app{ grid-template-columns:1fr; } }
+
+    .panel, .player {
+      background:#f9fafb; border-radius:12px; border:1px solid #e5e7eb;
+      padding:14px 16px;
+    }
+    h1,h2 { margin:0 0 0.5rem; }
+    .meta { font-size:0.85rem; color:#6b7280; margin-bottom:6px; }
+
+    .quiz-list { list-style:none; padding:0; margin:0; }
+    .quiz-list li { margin-bottom:8px; }
+    .quiz-btn {
+      width:100%; text-align:left;
+      padding:8px 10px; border-radius:10px;
+      border:1px solid #d1d5db; background:white;
+      cursor:pointer; font-size:0.9rem;
+    }
+    .quiz-btn:hover { background:#eef2ff; }
+
+    .btn {
+      padding:8px 14px; border-radius:10px; border:none;
+      background:#4f46e5; color:white; cursor:pointer;
+      font-weight:600; font-size:0.9rem;
+      box-shadow:0 6px 14px rgba(79,70,229,0.35);
+    }
+    .btn:disabled { opacity:0.5; box-shadow:none; cursor:default; }
+
+    .option-btn {
+      width:100%; text-align:left; padding:8px 10px;
+      margin-bottom:6px; border-radius:8px;
+      border:1px solid #d1d5db; background:white; cursor:pointer;
+      font-size:0.9rem;
+    }
+    .option-btn.selected { background:#eef2ff; border-color:#4f46e5; }
+
+    .question-block { margin-bottom:16px; padding-bottom:8px; border-bottom:1px dashed #e5e7eb; }
+    .question-title { font-weight:600; margin-bottom:4px; }
+
+    textarea.answer-box {
+      width:100%; min-height:60px; resize:vertical;
+      padding:8px; border-radius:8px; border:1px solid #d1d5db; font-size:0.9rem;
+    }
+
+    #scoreText {
+      display:none; background:#d1fae5; color:#065f46;
+      padding:4px 10px; border-radius:999px; font-size:0.85rem; font-weight:600;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <!-- LEFT: quiz selection -->
+  <div>
+    <h1>Available Quizzes</h1>
+    <p class="meta">Select a quiz from the list below.</p>
+    <div class="panel">
+      <ul id="quizList" class="quiz-list">
+        <li><span class="meta">Loading quiz list...</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- RIGHT: quiz player -->
+  <div class="player">
+    <h2 id="quizTitle">Quiz</h2>
+    <p id="quizDesc" class="meta">Choose a quiz on the left to begin.</p>
+    <div id="quizMeta" class="meta">0 questions</div>
+
+    <div id="quizBody" style="min-height:200px;">
+      <p style="color:#6b7280;">Waiting for quiz selection...</p>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+      <button id="startBtn" class="btn" disabled>Start Quiz</button>
+      <span id="progressText" class="meta"></span>
+      <span id="scoreText"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentQuiz = null; // {title, description, questions}
+  let quizQuestions = []; // reference to currentQuiz.questions
+  let qIndex = 0;
+  let score = 0;
+  let selectedIndex = null;
+
+  async function loadManifest() {
+    try {
+      const res = await fetch("quizzes/manifest.json");
+      if (!res.ok) throw new Error("Cannot load manifest");
+      const manifest = await res.json();
+      renderQuizList(manifest);
+    } catch (e) {
+      console.error(e);
+      const list = document.getElementById("quizList");
+      list.innerHTML = "<li><span class='meta'>Failed to load quiz list.</span></li>";
+    }
+  }
+
+  function renderQuizList(manifest) {
+    const list = document.getElementById("quizList");
+    list.innerHTML = "";
+
+    if (!manifest.length) {
+      list.innerHTML = "<li><span class='meta'>No quizzes available.</span></li>";
+      return;
+    }
+
+    manifest.forEach(entry => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.className = "quiz-btn";
+      btn.textContent = entry.title;
+      btn.onclick = () => loadQuizFile(entry);
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+
+  async function loadQuizFile(entry) {
+    try {
+      const res = await fetch("quizzes/" + entry.filename);
+      if (!res.ok) throw new Error("Cannot load quiz file");
+      const data = await res.json();
+
+      currentQuiz = data;
+      quizQuestions = data.questions || [];
+      qIndex = 0;
+      score = 0;
+      selectedIndex = null;
+
+      document.getElementById("quizTitle").textContent = data.title || "Quiz";
+      document.getElementById("quizDesc").textContent = data.description || "";
+      document.getElementById("quizMeta").textContent =
+        `${quizQuestions.length} question${quizQuestions.length !== 1 ? "s" : ""}`;
+
+      document.getElementById("quizBody").innerHTML =
+        `<p>Quiz loaded. Click <strong>Start Quiz</strong> to begin.</p>`;
+      document.getElementById("startBtn").disabled = !quizQuestions.length;
+      document.getElementById("progressText").textContent = "";
+      document.getElementById("scoreText").style.display = "none";
+    } catch (e) {
+      console.error(e);
+      alert("Failed to load quiz.");
+    }
+  }
+
+  function firstMCQIndex() {
+    return quizQuestions.findIndex(q => q.type === "mcq");
+  }
+
+  function nextMCQIndex(i) {
+    for (let x = i + 1; x < quizQuestions.length; x++) {
+      if (quizQuestions[x].type === "mcq") return x;
+    }
+    return null;
+  }
+
+  function renderMCQQuestion() {
+    const q = quizQuestions[qIndex];
+    const body = document.getElementById("quizBody");
+    body.innerHTML = "";
+
+    const title = document.createElement("div");
+    title.className = "question-title";
+    title.textContent = `Q${qIndex + 1}. ${q.text}`;
+    body.appendChild(title);
+
+    selectedIndex = null;
+
+    q.options.forEach((opt, i) => {
+      const btn = document.createElement("button");
+      btn.className = "option-btn";
+      btn.textContent = opt;
+      btn.onclick = () => {
+        selectedIndex = i;
+        body.querySelectorAll(".option-btn").forEach(b => b.classList.remove("selected"));
+        btn.classList.add("selected");
+      };
+      body.appendChild(btn);
+    });
+
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "btn";
+    nextBtn.style.marginTop = "10px";
+    nextBtn.textContent = nextMCQIndex(qIndex) === null ? "Finish MCQs" : "Next";
+
+    nextBtn.onclick = () => {
+      if (selectedIndex === null) {
+        alert("Please select an option.");
+        return;
+      }
+      q.userSelected = selectedIndex;
+      if (q.answerIndex === selectedIndex) score++;
+
+      const nextIdx = nextMCQIndex(qIndex);
+      if (nextIdx === null) {
+        showMCQSummary();
+      } else {
+        qIndex = nextIdx;
+        renderMCQQuestion();
+      }
+    };
+
+    body.appendChild(nextBtn);
+
+    const mcqCount = quizQuestions.filter(x => x.type === "mcq").length;
+    const answered = quizQuestions.filter(x => x.type === "mcq" && x.userSelected != null).length;
+    document.getElementById("progressText").textContent =
+      `MCQ progress: ${answered + 1} / ${mcqCount}`;
+  }
+
+  function renderShortAnswerQuestions() {
+    const body = document.getElementById("quizBody");
+    body.innerHTML += "<h3>Short-answer questions</h3>";
+
+    quizQuestions.forEach((q, idx) => {
+      if (q.type !== "short") return;
+      const block = document.createElement("div");
+      block.className = "question-block";
+      block.innerHTML = `
+        <div class="question-title">Q${idx + 1}. ${q.text}</div>
+        <textarea class="answer-box" placeholder="Type your answer..."></textarea>
+      `;
+      body.appendChild(block);
+    });
+  }
+
+  function showMCQSummary() {
+    const body = document.getElementById("quizBody");
+    const totalMCQ = quizQuestions.filter(q => q.type === "mcq").length;
+
+    body.innerHTML = `
+      <h2>Quiz Summary</h2>
+      <p>You scored <strong>${score}</strong> out of <strong>${totalMCQ}</strong>.</p>
+    `;
+
+    quizQuestions.forEach((q, idx) => {
+      if (q.type !== "mcq") return;
+
+      const block = document.createElement("div");
+      block.className = "question-block";
+
+      const title = document.createElement("div");
+      title.className = "question-title";
+      title.textContent = `Q${idx + 1}. ${q.text}`;
+      block.appendChild(title);
+
+      q.options.forEach((opt, i) => {
+        const div = document.createElement("div");
+        div.style.padding = "6px 10px";
+        div.style.borderRadius = "6px";
+        div.style.marginBottom = "4px";
+        div.style.border = "1px solid #d1d5db";
+
+        if (i === q.answerIndex) {
+          div.style.background = "#dcfce7";
+          div.style.borderColor = "#16a34a";
+          div.innerHTML = `<strong>✓ ${opt}</strong> (Correct)`;
+        } else if (q.userSelected === i) {
+          div.style.background = "#fee2e2";
+          div.style.borderColor = "#dc2626";
+          div.innerHTML = `<strong>✗ ${opt}</strong> (Your answer)</strong>`;
+        } else {
+          div.textContent = opt;
+        }
+
+        block.appendChild(div);
+      });
+
+      body.appendChild(block);
+    });
+
+    const shortCount = quizQuestions.filter(q => q.type === "short").length;
+    if (shortCount > 0) {
+      body.innerHTML += `<p class="meta">There are ${shortCount} short-answer question(s) which are not auto-graded.</p>`;
+    }
+
+    const retakeBtn = document.createElement("button");
+    retakeBtn.className = "btn";
+    retakeBtn.textContent = "Retake Quiz";
+    retakeBtn.style.marginTop = "16px";
+    retakeBtn.onclick = () => location.reload();
+    body.appendChild(retakeBtn);
+
+    document.getElementById("progressText").textContent = "Finished";
+    const scoreText = document.getElementById("scoreText");
+    scoreText.style.display = "inline-block";
+    scoreText.textContent = `Score: ${score}/${totalMCQ}`;
+  }
+
+  document.getElementById("startBtn").onclick = () => {
+    if (!quizQuestions.length) return;
+    score = 0;
+    quizQuestions.forEach(q => { q.userSelected = null; });
+
+    const first = firstMCQIndex();
+    if (first !== -1) {
+      qIndex = first;
+      renderMCQQuestion();
+      const hasShort = quizQuestions.some(q => q.type === "short");
+      if (hasShort) renderShortAnswerQuestions();
+    } else {
+      // no MCQs, only short-answer
+      const body = document.getElementById("quizBody");
+      body.innerHTML = "";
+      renderShortAnswerQuestions();
+    }
+  };
+
+  loadManifest();
+</script>
+</body>
+</html>
