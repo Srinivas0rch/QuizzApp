@@ -1,60 +1,56 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8" />
-<title>Trainer Login</title>
-<style>
-    body { font-family: Arial; background:#f2f2f2; display:flex; height:100vh;
-           justify-content:center; align-items:center; }
-    #box { background:white; padding:40px; border-radius:10px; width:380px;
-           text-align:center; box-shadow:0 0 20px rgba(0,0,0,0.1); }
-    input { width:100%; padding:14px; margin-top:15px; border-radius:6px;
-            border:1px solid #ccc; font-size:16px; }
-    button { margin-top:20px; width:100%; padding:14px; font-size:18px;
-             background:#0066ff; color:white; border:none; border-radius:6px;
-             cursor:pointer; }
-    #error { color:red; margin-top:15px; height:20px; }
-</style>
+  <meta charset="UTF-8">
+  <title>Trainer Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial; background:#f3f4f6; display:flex; justify-content:center;
+           align-items:center; height:100vh; margin:0; }
+    .box { background:white; padding:30px; border-radius:12px; width:320px;
+           box-shadow:0 10px 25px rgba(0,0,0,0.15); text-align:center; }
+    input { width:100%; padding:10px; margin-top:10px; border-radius:8px;
+            border:1px solid #ccc; font-size:1rem; }
+    button { width:100%; padding:10px; margin-top:15px; background:#2563eb; color:white;
+             border:none; border-radius:8px; font-size:1rem; cursor:pointer; }
+    #error { color:red; margin-top:10px; font-size:0.9rem; }
+  </style>
 </head>
 
 <body>
-<div id="box">
-    <h2>Trainer Login</h2>
+<div class="box">
+  <h2>Trainer Login</h2>
 
-    <form id="loginForm">
-        <input id="pw" type="password" placeholder="Enter password" required autocomplete="current-password">
-        <button type="submit">Login</button>
-    </form>
-
+  <form id="loginForm">
+    <input id="pw" type="password" placeholder="Enter password" required />
+    <button type="submit">Login</button>
     <div id="error"></div>
+  </form>
 </div>
 
 <script>
-// ===== SHA-256 hashing function =====
-async function hashPassword(str) {
-    const enc = new TextEncoder();
-    const buf = await crypto.subtle.digest("SHA-256", enc.encode(str));
-    return Array.from(new Uint8Array(buf))
-        .map(b => b.toString(16).padStart(2, "0"))
-        .join("");
+const STORED_HASH = "7c376fc4dbe92142bcc71ed3b314301cf495e7d91d72c6d0252bae3550625a76";
+
+async function hashPassword(pw) {
+  const enc = new TextEncoder().encode(pw);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf))
+              .map(b => b.toString(16).padStart(2, "0"))
+              .join("");
 }
 
-// ===== Correct SHA-256 for "SuperQuiz123" =====
-const STORED_HASH =
-"7c376fc4dbe92142bcc71ed3b314301cf495e7d91d72c6d0252bae3550625a76";
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault(); // prevent form reload
 
-// ===== Login handler =====
-document.getElementById("loginForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
+  const inputPw = document.getElementById("pw").value.trim();
+  const hashed = await hashPassword(inputPw);
 
-    const pw = document.getElementById("pw").value.trim();
-    const hashed = await hashPassword(pw);
-
-    if (hashed === STORED_HASH) {
-        window.location.href = "quizbuilder.html";   // 🔥 FINAL redirect
-    } else {
-        document.getElementById("error").innerText = "Incorrect password.";
-    }
+  if (hashed === STORED_HASH) {
+    localStorage.setItem("trainerAuthenticated", "true");
+    window.location.href = "QuizBuilder.html";   // <--- FIXED
+  } else {
+    document.getElementById("error").textContent = "Incorrect password.";
+  }
 });
 </script>
 
