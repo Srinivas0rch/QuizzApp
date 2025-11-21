@@ -137,7 +137,7 @@
 
   async function loadQuizFile(entry) {
     try {
-      const res = await fetch("quizzes/" + entry.filename);
+      const res = await fetch("/quizzes/" + entry.filename);
       if (!res.ok) throw new Error("Cannot load quiz file");
       const data = await res.json();
 
