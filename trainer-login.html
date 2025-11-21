@@ -1,95 +1,88 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <title>Trainer Login</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f3f3f3;
+      background: #f2f2f2;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
+      margin: 0;
     }
     .box {
       background: white;
-      padding: 30px;
-      border-radius: 12px;
+      padding: 40px;
+      border-radius: 10px;
       width: 350px;
       text-align: center;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
     }
     input {
       width: 100%;
       padding: 12px;
-      margin-top: 10px;
-      font-size: 16px;
+      margin-top: 15px;
+      font-size: 18px;
     }
     button {
       width: 100%;
-      padding: 12px;
-      margin-top: 15px;
-      background: #0066ff;
+      margin-top: 20px;
+      padding: 14px;
+      background: #006aff;
       color: white;
-      font-size: 18px;
       border: none;
       border-radius: 6px;
       cursor: pointer;
+      font-size: 20px;
     }
     #error {
-      color: red;
       margin-top: 12px;
+      color: red;
+      font-weight: bold;
     }
   </style>
 </head>
+
 <body>
 
 <div class="box">
   <h2>Trainer Login</h2>
-  <input type="password" id="pw" placeholder="Enter password">
-  <button onclick="login()">Login</button>
+
+  <form id="loginForm">
+      <input type="password" id="pw" placeholder="Enter password">
+      <button type="submit">Login</button>
+  </form>
+
   <div id="error"></div>
 </div>
 
 <script>
-async function hashPassword(password, salt="quizsalt123") {
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        "raw",
-        encoder.encode(password),
-        { name: "PBKDF2" },
-        false,
-        ["deriveBits"]
-    );
+  // SHA-256 hash of:  SuperQuiz123
+  const STORED_HASH = "42e5bd285ec9a0ff35b0c6468af6a687aed7748436c6d9a5896153fbf6f46f67";
 
-    const bits = await crypto.subtle.deriveBits(
-        {
-            name: "PBKDF2",
-            hash: "SHA-256",
-            salt: encoder.encode(salt),
-            iterations: 100000
-        },
-        key,
-        256
-    );
+  async function hashPassword(str) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(str);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  }
 
-    return Array.from(new Uint8Array(bits))
-        .map(b => b.toString(16).padStart(2, "0"))
-        .join("");
-}
+  document.getElementById("loginForm").addEventListener("submit", async (event) => {
+      event.preventDefault();  // ⛔ STOP page reload!
 
-const STORED_HASH = "42e5bd285ec9a0ff35b0c6468af6a687aed7748436c6d9a5896153fbf6f46f67";
+      const pw = document.getElementById("pw").value.trim();
+      const hashed = await hashPassword(pw);
 
-async function login() {
-    const pw = document.getElementById("pw").value;
-    const hashed = await hashPassword(pw);
-
-    if (hashed === STORED_HASH) {
-        window.location.href = "QuizBuilder.html";
-    } else {
-        document.getElementById("error").innerText = "Incorrect password.";
-    }
-}
+      if (hashed === STORED_HASH) {
+          window.location.href = "QuizBuilder.html";   // ✅ Go to builder
+      } else {
+          document.getElementById("error").innerText = "Incorrect password.";
+      }
+  });
 </script>
 
 </body>
