@@ -1,45 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Trainer Login</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f2f2f2;
+      background: #f4f4f4;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
-      margin: 0;
     }
     .box {
       background: white;
-      padding: 40px;
-      border-radius: 10px;
+      padding: 30px;
       width: 350px;
       text-align: center;
-      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
     }
     input {
-      width: 100%;
+      width: 90%;
       padding: 12px;
       margin-top: 15px;
       font-size: 18px;
     }
     button {
-      width: 100%;
       margin-top: 20px;
-      padding: 14px;
-      background: #006aff;
+      width: 95%;
+      padding: 12px;
+      background: #0074ff;
       color: white;
+      font-size: 18px;
       border: none;
-      border-radius: 6px;
       cursor: pointer;
-      font-size: 20px;
+      border-radius: 6px;
     }
     #error {
-      margin-top: 12px;
+      margin-top: 15px;
       color: red;
       font-weight: bold;
     }
@@ -52,36 +51,36 @@
   <h2>Trainer Login</h2>
 
   <form id="loginForm">
-      <input type="password" id="pw" placeholder="Enter password">
-      <button type="submit">Login</button>
+    <input type="password" id="pw" placeholder="Enter password" autocomplete="off" />
+    <button type="submit">Login</button>
   </form>
 
   <div id="error"></div>
 </div>
 
 <script>
-  const STORED_HASH = "42e5bd285ec9a0ff35b0c6468af6a687aed7748436c6d9a5896153fbf6f46f67";
+const STORED_HASH = "7c376fc4dbe92142bcc71ed3b314301cf495e7d91d72c6d0252bae3550625a76"; 
 
-  async function hashPassword(str) {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(str);
-      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+// Hash function
+async function hashPassword(pw) {
+  const msgUint8 = new TextEncoder().encode(pw);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+document.getElementById("loginForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault(); // STOP page reload
+
+  const pw = document.getElementById("pw").value.trim();
+  const hashed = await hashPassword(pw);
+
+  if (hashed === STORED_HASH) {
+    window.location.href = "QuizBuilder.html";   // SUCCESS ✔
+  } else {
+    document.getElementById("error").innerText = "Incorrect password.";
   }
-
-  document.getElementById("loginForm").addEventListener("submit", async (event) => {
-      event.preventDefault();  // ⛔ STOP page reload!
-
-      const pw = document.getElementById("pw").value.trim();
-      const hashed = await hashPassword(pw);
-
-      if (hashed === STORED_HASH) {
-          window.location.href = "QuizBuilder.html";   // ✅ Go to builder
-      } else {
-          document.getElementById("error").innerText = "Incorrect password.";
-      }
-  });
+});
 </script>
 
 </body>
