@@ -1,5 +1,5 @@
 {
   "quizzes": [
-    { "id": "python_basics_quiz", "title": "Python Basics Quiz", "file": "sample.json" }
+    { "id": "python_basics_quiz", "title": "Python Basics Quiz", "filename": "sample.json" }
   ]
 }
